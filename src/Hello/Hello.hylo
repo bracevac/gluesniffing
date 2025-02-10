@@ -1,0 +1,80 @@
+/*
+ * An exploration of Tail Recursion Modulo Context in Hylo
+ */
+
+public trait Ctx {
+  type Result
+  fun comp(_ c2: Self) -> Self
+  fun app(_ a : Result) -> Result
+}
+
+
+type List<T: Regular>: Regular {
+
+  var tail: Optional<Node<T>>
+
+  /// Creates an empty list.
+  public init() {
+    &self.tail = .none()
+  }
+
+  /// Adds `element` in the front of this list.
+  public fun prepend(_ element: sink T) inout {
+    if sink let t? = tail {
+      &self.tail = Node(element, t) as _
+    } else {
+      &self.tail = Node(element) as _
+    }
+  }
+
+  /// Projects the head of this list iff it is not empty.
+  public property head: Optional<T> {
+    tail.map(fun (_ x) { x.value.copy() })
+  }
+
+}
+
+type Node<T: Regular>: Regular {
+
+  public let value: T
+
+  let next_pointer: PointerToMutable<Self>
+
+  public init(_ value: sink T) {
+    &self.value = value
+    &self.next_pointer = .null()
+  }
+
+  public init(_ value: sink T, _ next: Self) {
+    &self.value = value
+    &self.next_pointer = .allocate(count: 1)
+    &self.next_pointer.unsafe_initialize_pointee(next.copy())
+  }
+
+  public property next: Self {
+    let { next_pointer.unsafe_pointee() }
+  }
+
+  public fun deinit() sink {
+    if next_pointer != .null() {
+      &next_pointer.unsafe_pointee().deinit()
+    }
+  }
+
+  public fun copy() -> Self {
+    if next_pointer == .null() {
+      return .new(value.copy())
+    } else {
+      return .new(value.copy(), next.copy())
+    }
+  }
+
+}
+
+public fun main() {
+  var xs = List<Int>()
+  &xs.prepend(1)
+  &xs.prepend(2)
+  if let x? = xs.head { print(x) }
+}
+
