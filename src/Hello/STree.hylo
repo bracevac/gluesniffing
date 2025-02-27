@@ -1,0 +1,96 @@
+/// A boxed value.
+type Indirect<T : Regular> : Regular {
+
+  /// A pointer to the wrapped element.
+  private let wrapped: PointerToMutable<T>
+
+  /// Creates an instance wrapping `value`.
+  public init(_ value: sink T) {
+    &self.wrapped = .allocate(count: 1)
+    &self.wrapped.unsafe_initialize_pointee(value)
+  }
+
+  public property value: T {
+    let   { yield wrapped.unsafe[] }
+    inout { yield &wrapped.unsafe[] }
+  }
+
+  public fun take() sink -> T {
+    &wrapped.unsafe_pointee()
+  }
+
+  public fun deinit() sink {
+    &wrapped.unsafe_pointee().deinit()
+    &wrapped.deallocate()
+  }
+
+  public fun copy() -> Self {
+    .new(wrapped.unsafe[].copy())
+  }
+
+}
+
+type Node<T : Regular & Comparable> : Regular {
+
+  public var value: T
+  public var left: Optional<Indirect<Self>>
+  public var right: Optional<Indirect<Self>>
+
+  public memberwise init
+  public init(_ value: sink T, left l: sink Optional<Node<T>> = .none(), right r: sink Optional<Node<T>> = .none()) {
+    &self.value = value
+    &self.left = .none()
+    &self.right = .none()
+    if var l? = l { &self.left = Indirect(l) as _ }
+    if var r? = r { &self.right = Indirect(r) as _ }
+  }
+
+  public fun lookup(_ x: T) sink -> Bool {
+    var n: Self
+
+    if x == self.value {
+      return true
+    } else if x < self.value {
+      if var l? = self.left { &n = l.take() } else { return false }
+    } else {
+      if var r? = self.right { &n = r.take() } else { return false }
+    }
+
+    return n.lookup(x)
+  }
+
+}
+
+type Tree<T : Regular & Comparable> : Regular {
+
+  public var root: Optional<Node<T>>
+
+  public memberwise init
+  public init(_ r: sink Optional<Node<T>> = .none() ) { &self.root = r }
+
+  public fun is_leaf() -> Bool {
+    // Should be just `self.root == .none()`; see (#1665)
+    if let _ : Node<T> = root { true } else { false }
+  }
+
+  public fun lookup(_ x: T) sink -> Bool {
+    if var root? = self.root {
+      root.lookup(x)
+    } else {
+      false
+    }
+  }
+
+}
+
+public fun main() {
+  var n1 : Node<Int> = Node(value: 2, left: .none(), right: .none())
+  var n2 : Node<Int> = Node(5, left: Node(3, left: .none(), right: .none()), right: n1)
+  var t = Tree<Int>(n2)
+  if t.lookup(1) {
+    print("yes")
+  } else {
+    print("no")
+  }
+  //let _ = t.lookup(2) //error
+}
